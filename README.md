@@ -2,7 +2,7 @@
 
 > P2P file sharing built on GitHub Actions + `repository_dispatch`
 
-*Dashboard updated: 2026-03-22 08:40 UTC*
+*Dashboard updated: 2026-03-22 08:41 UTC*
 
 ## Network Status
 
@@ -10,8 +10,8 @@
 |--------|-------|
 | Peers | **3** online / 0 degraded / 0 offline |
 | Storage | 0 MB / 6000 MB |
-| Files | 1 |
-| Uploads | 1 |
+| Files | 2 |
+| Uploads | 2 |
 | Downloads | 0 |
 | Redundancy | 2x |
 | Encryption | Disabled |
@@ -21,6 +21,7 @@
 | Filename | Size | Chunks | Downloads | Uploaded | Expires |
 |----------|------|--------|-----------|----------|---------|
 | `gists.txt` | 9.4 KB | 1 | 0 | 2026-03-22 | 2026-04-21 |
+| `test-upload.txt` | 93 B | 1 | 0 | 2026-03-22 | 2026-04-21 |
 
 ## Peers
 
