@@ -8,8 +8,8 @@
 
 | Metric | Value |
 |--------|-------|
-| Peers | **0** online / 0 degraded / 0 offline |
-| Storage | 0 MB / 0 MB |
+| Peers | **1** online / 0 degraded / 0 offline |
+| Storage | 0 MB / 2000 MB |
 | Files | 0 |
 | Uploads | 0 |
 | Downloads | 0 |
@@ -22,7 +22,9 @@
 
 ## Peers
 
-*No peers registered. Run `peer/setup.sh` to add a peer node.*
+| Peer | Status | Storage | Chunks | Uptime | Last Seen |
+|------|--------|---------|--------|--------|-----------|
+| `SolanaLeeky/peer-node-01` | 🟢 online | 0/2000 MB | 0 | 100.0% |  |
 
 ## How to Use
 
