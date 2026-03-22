@@ -1,0 +1,25 @@
+{
+  "file_id": "f_11fe9156",
+  "filename": "test-upload.txt",
+  "size_bytes": 93,
+  "chunk_size_bytes": 40960,
+  "total_chunks": 1,
+  "sha256": "11fe91568fd538f279a003712bf3e27918aa0c7d62f629e691bc9402bed6f8bf",
+  "uploaded_by": "SolanaLeeky",
+  "uploaded_at": "2026-03-22T08:40:45.658459+00:00",
+  "expires_at": "2026-04-21T08:40:45.658459+00:00",
+  "redundancy": 2,
+  "status": "healthy",
+  "download_count": 0,
+  "chunks": {
+    "chunk_000": {
+      "sha256": "11fe91568fd538f279a003712bf3e27918aa0c7d62f629e691bc9402bed6f8bf",
+      "size_bytes": 93,
+      "peers": [
+        "SolanaLeeky/peer-node-01",
+        "SolanaLeeky/peer-node-02"
+      ],
+      "status": "stored"
+    }
+  }
+}
