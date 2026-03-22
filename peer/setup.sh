@@ -142,6 +142,8 @@ echo "$NETWORK_TOKEN" | gh secret set NETWORK_TOKEN --repo "$PEER_REPO"
 
 # ── Commit and push ────────────────────────────────────────────────
 echo "Committing and pushing..."
+git config user.name "SolanaLeeky"
+git config user.email "SolanaLeeky@users.noreply.github.com"
 git add -A
 git commit -m "Initialize GitTorrent peer node
 
