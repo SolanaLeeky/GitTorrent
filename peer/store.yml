@@ -1,0 +1,81 @@
+# Peer workflow: receive and store chunks from the tracker.
+# Triggered by repository_dispatch from tracker's upload pipeline.
+
+name: Store Chunks
+
+on:
+  repository_dispatch:
+    types: [store-chunks]
+
+jobs:
+  store:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Decode and store chunks
+        env:
+          PAYLOAD: ${{ toJson(github.event.client_payload) }}
+        run: |
+          set -euo pipefail
+
+          FILENAME=$(echo "$PAYLOAD" | jq -r '.filename')
+          FILE_ID=$(echo "$PAYLOAD" | jq -r '.file_id')
+          CHUNK_DIR="chunks/$FILENAME"
+          mkdir -p "$CHUNK_DIR"
+
+          echo "Storing chunks for $FILENAME (file_id: $FILE_ID)"
+
+          STORED=0
+          FAILED=0
+
+          echo "$PAYLOAD" | jq -c '.chunks[]' | while read -r chunk; do
+            ID=$(echo "$chunk" | jq -r '.id')
+            DATA=$(echo "$chunk" | jq -r '.data')
+            EXPECTED_HASH=$(echo "$chunk" | jq -r '.sha256')
+
+            # Write base64 data to file
+            echo "$DATA" > "$CHUNK_DIR/$ID.b64"
+
+            # Verify hash: decode base64 → sha256
+            ACTUAL_HASH=$(echo "$DATA" | base64 -d | sha256sum | cut -d' ' -f1)
+
+            if [ "$ACTUAL_HASH" != "$EXPECTED_HASH" ]; then
+              echo "  HASH MISMATCH: $ID (expected $EXPECTED_HASH, got $ACTUAL_HASH)"
+              rm -f "$CHUNK_DIR/$ID.b64"
+              FAILED=$((FAILED + 1))
+            else
+              echo "  Stored $ID ($(echo "$DATA" | wc -c | tr -d ' ') bytes b64)"
+              STORED=$((STORED + 1))
+            fi
+          done
+
+          echo "Done: stored chunks for $FILENAME"
+
+      - name: Update manifest
+        run: python3 update_manifest.py
+
+      - name: Commit stored chunks
+        run: |
+          git config user.name "peer-bot"
+          git config user.email "peer@gittorrent.dev"
+          git add chunks/ manifest.json
+          git diff --cached --quiet || \
+            git commit -m "Store chunks: $(echo '${{ toJson(github.event.client_payload) }}' | jq -r '.filename')"
+          git push
+
+      - name: Confirm storage to tracker
+        env:
+          PAYLOAD: ${{ toJson(github.event.client_payload) }}
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.NETWORK_TOKEN }}
+          repository: ${{ fromJson(env.PAYLOAD).callback_repo }}
+          event-type: store-confirm
+          client-payload: >-
+            {
+              "peer": "${{ github.repository }}",
+              "file_id": "${{ fromJson(env.PAYLOAD).file_id }}",
+              "filename": "${{ fromJson(env.PAYLOAD).filename }}",
+              "status": "success"
+            }

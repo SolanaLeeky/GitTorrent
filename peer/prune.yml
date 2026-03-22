@@ -1,0 +1,79 @@
+# Peer workflow: delete expired chunks.
+# Runs daily. Checks each file's chunks against expiry config.
+
+name: Prune Expired Chunks
+
+on:
+  schedule:
+    - cron: '0 3 * * *'      # daily at 3 AM UTC
+  repository_dispatch:
+    types: [prune-file]       # tracker can force-prune a specific file
+  workflow_dispatch:           # allow manual trigger
+
+jobs:
+  prune:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prune chunks
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PAYLOAD: ${{ toJson(github.event.client_payload) }}
+        run: |
+          set -euo pipefail
+
+          EXPIRY_DAYS=$(jq -r '.chunk_expiry_days // 30' config.json)
+          PRUNED=0
+
+          if [ "$EVENT_NAME" = "repository_dispatch" ]; then
+            # Force-prune a specific file
+            TARGET_FILE=$(echo "$PAYLOAD" | jq -r '.filename // empty')
+            if [ -n "$TARGET_FILE" ] && [ -d "chunks/$TARGET_FILE" ]; then
+              echo "Force-pruning all chunks for: $TARGET_FILE"
+              rm -rf "chunks/$TARGET_FILE"
+              PRUNED=$((PRUNED + 1))
+            fi
+          else
+            # Age-based prune: delete chunk dirs older than expiry
+            if [ -d chunks ]; then
+              for FILE_DIR in chunks/*/; do
+                [ -d "$FILE_DIR" ] || continue
+                DIRNAME=$(basename "$FILE_DIR")
+
+                # Check age of oldest .b64 file in the directory
+                OLDEST=$(find "$FILE_DIR" -name '*.b64' -type f -printf '%T@\n' 2>/dev/null \
+                  | sort -n | head -1)
+
+                if [ -z "$OLDEST" ]; then
+                  # Empty dir — remove it
+                  rmdir "$FILE_DIR" 2>/dev/null || true
+                  continue
+                fi
+
+                # Calculate age in days
+                NOW=$(date +%s)
+                AGE_DAYS=$(( (NOW - ${OLDEST%.*}) / 86400 ))
+
+                if [ "$AGE_DAYS" -ge "$EXPIRY_DAYS" ]; then
+                  echo "  Pruning $DIRNAME (${AGE_DAYS}d old, limit ${EXPIRY_DAYS}d)"
+                  rm -rf "$FILE_DIR"
+                  PRUNED=$((PRUNED + 1))
+                fi
+              done
+            fi
+          fi
+
+          echo "Pruned $PRUNED file directories"
+
+      - name: Update manifest
+        run: python3 update_manifest.py
+
+      - name: Commit if changed
+        run: |
+          git config user.name "peer-bot"
+          git config user.email "peer@gittorrent.dev"
+          git add -A
+          git diff --cached --quiet || \
+            git commit -m "Prune: removed expired chunks"
+          git push

@@ -1,0 +1,73 @@
+# Peer workflow: copy a chunk to another peer (peer-to-peer replication).
+# Triggered by tracker's rebalance pipeline.
+# This peer reads the chunk from its own storage and dispatches it to the target.
+
+name: Replicate Chunk
+
+on:
+  repository_dispatch:
+    types: [replicate-chunk]
+
+jobs:
+  replicate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read chunk and send to target peer
+        env:
+          PAYLOAD: ${{ toJson(github.event.client_payload) }}
+        run: |
+          set -euo pipefail
+
+          FILENAME=$(echo "$PAYLOAD" | jq -r '.filename')
+          CHUNK_ID=$(echo "$PAYLOAD" | jq -r '.chunk_id')
+          TARGET_PEER=$(echo "$PAYLOAD" | jq -r '.target_peer')
+
+          echo "Replicating $FILENAME/$CHUNK_ID → $TARGET_PEER"
+
+          # Find the chunk
+          CHUNK_FILE="chunks/$FILENAME/$CHUNK_ID.b64"
+          if [ ! -f "$CHUNK_FILE" ]; then
+            echo "ERROR: Chunk not found: $CHUNK_FILE"
+            exit 1
+          fi
+
+          DATA=$(cat "$CHUNK_FILE")
+          HASH=$(echo "$DATA" | base64 -d | sha256sum | cut -d' ' -f1)
+
+          # Build store-chunks payload for the target peer
+          STORE_PAYLOAD=$(jq -n \
+            --arg filename "$FILENAME" \
+            --arg file_id "replicated" \
+            --arg id "$CHUNK_ID" \
+            --arg data "$DATA" \
+            --arg hash "$HASH" \
+            --arg callback_repo "$(jq -r '.tracker_repo' config.json)" \
+            '{
+              file_id: $file_id,
+              filename: $filename,
+              chunks: [{id: $id, data: $data, sha256: $hash}],
+              callback_repo: $callback_repo,
+              callback_event: "replicate-confirm"
+            }')
+
+          # Dispatch to target peer
+          HTTP_CODE=$(curl -s -o /tmp/dispatch_response.txt -w "%{http_code}" \
+            -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${{ secrets.NETWORK_TOKEN }}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/$TARGET_PEER/dispatches" \
+            -d "$(jq -n \
+              --arg event_type "store-chunks" \
+              --argjson payload "$STORE_PAYLOAD" \
+              '{event_type: $event_type, client_payload: $payload}')")
+
+          if [ "$HTTP_CODE" = "204" ]; then
+            echo "Replicated $CHUNK_ID to $TARGET_PEER"
+          else
+            echo "Replication FAILED: HTTP $HTTP_CODE"
+            cat /tmp/dispatch_response.txt
+            exit 1
+          fi

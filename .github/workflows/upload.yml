@@ -1,0 +1,112 @@
+# Tracker workflow: Upload a file to the GitTorrent network.
+# Triggered when an issue titled "UPLOAD <filename>" is opened.
+#
+# Flow: download attachment → split into chunks → distribute to peers → commit index → close issue
+
+name: Upload File
+
+on:
+  issues:
+    types: [opened]
+
+jobs:
+  upload:
+    if: startsWith(github.event.issue.title, 'UPLOAD')
+    runs-on: ubuntu-latest
+    concurrency:
+      group: upload-${{ github.event.issue.number }}
+      cancel-in-progress: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Check upload authorization
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          UPLOADER: ${{ github.event.issue.user.login }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          python3 -c "
+          from engine.security import is_upload_authorized
+          import os, sys
+          user = os.environ['UPLOADER']
+          if not is_upload_authorized(user):
+              print(f'DENIED: {user} is not authorized to upload')
+              sys.exit(1)
+          print(f'Authorized: {user}')
+          " || {
+            gh issue comment "$ISSUE_NUMBER" --body "**Upload denied**: \`$UPLOADER\` is not in the authorized uploaders list."
+            gh issue close "$ISSUE_NUMBER"
+            exit 1
+          }
+
+      - name: Download attached file from issue
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+        run: python -m engine.download_attachment
+
+      - name: Split, hash, and distribute to peers
+        env:
+          GITHUB_TOKEN: ${{ secrets.NETWORK_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          UPLOADER: ${{ github.event.issue.user.login }}
+        run: python -m engine.chunker
+
+      - name: Commit file index
+        run: |
+          git config user.name "tracker-bot"
+          git config user.email "tracker@gittorrent.dev"
+          git add data/
+          git diff --cached --quiet && echo "No changes to commit" && exit 0
+          git commit -m "Upload: $(cat /tmp/upload_summary.json | python3 -c 'import sys,json; print(json.load(sys.stdin)[\"filename\"])')"
+          git push
+
+      - name: Comment and close issue
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          set -euo pipefail
+
+          # Read upload summary
+          if [ -f /tmp/upload_summary.json ]; then
+            FILE_ID=$(python3 -c "import json; d=json.load(open('/tmp/upload_summary.json')); print(d['file_id'])")
+            FILENAME=$(python3 -c "import json; d=json.load(open('/tmp/upload_summary.json')); print(d['filename'])")
+            SIZE=$(python3 -c "import json; d=json.load(open('/tmp/upload_summary.json')); print(d['size_bytes'])")
+            CHUNKS=$(python3 -c "import json; d=json.load(open('/tmp/upload_summary.json')); print(d['total_chunks'])")
+            PEERS=$(python3 -c "import json; d=json.load(open('/tmp/upload_summary.json')); print(d['peer_count'])")
+            SHA=$(python3 -c "import json; d=json.load(open('/tmp/upload_summary.json')); print(d['sha256'][:16])")
+
+            COMMENT="### File distributed successfully
+
+          | Field | Value |
+          |-------|-------|
+          | **File ID** | \`$FILE_ID\` |
+          | **Filename** | \`$FILENAME\` |
+          | **Size** | $SIZE bytes |
+          | **Chunks** | $CHUNKS |
+          | **Peers** | $PEERS |
+          | **SHA-256** | \`${SHA}...\` |
+
+          To download, open a new issue titled:
+          \`\`\`
+          DOWNLOAD $FILENAME
+          \`\`\`"
+          else
+            COMMENT="Upload completed, but summary was not generated. Check workflow logs."
+          fi
+
+          # Post comment
+          gh issue comment "$ISSUE_NUMBER" --body "$COMMENT"
+
+          # Close issue
+          gh issue close "$ISSUE_NUMBER"

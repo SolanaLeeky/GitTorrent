@@ -1,0 +1,8 @@
+{
+  "peer_id": "",
+  "tracker": "",
+  "storage_limit_mb": 2000,
+  "storage_used_mb": 0,
+  "chunks": {},
+  "last_heartbeat": ""
+}

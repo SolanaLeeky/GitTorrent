@@ -1,0 +1,42 @@
+# Tracker workflow: Auto-generate README.md as a live network dashboard.
+# Runs hourly and after any data change (upload, download, health check).
+
+name: Update Dashboard
+
+on:
+  schedule:
+    - cron: '15 * * * *'   # every hour at :15
+  workflow_run:
+    workflows: ["Upload File", "Download File", "Health Check", "Register Peer", "Cleanup"]
+    types: [completed]
+  workflow_dispatch:
+
+jobs:
+  dashboard:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: dashboard
+      cancel-in-progress: true
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Generate dashboard
+        run: python -m engine.dashboard
+
+      - name: Commit if changed
+        run: |
+          git config user.name "tracker-bot"
+          git config user.email "tracker@gittorrent.dev"
+          git add README.md
+          git diff --cached --quiet && echo "Dashboard unchanged" && exit 0
+          git commit -m "Update dashboard: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          git pull --rebase || true
+          git push

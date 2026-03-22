@@ -1,0 +1,44 @@
+# Tracker workflow: Remove expired files and completed transfers.
+#
+# Runs daily. For each expired file:
+#   1. Dispatches prune-file to all peers holding its chunks
+#   2. Deletes the file index JSON
+# Also removes completed/failed/stale transfer state.
+
+name: Cleanup
+
+on:
+  schedule:
+    - cron: '0 4 * * *'   # daily at 4 AM UTC
+  workflow_dispatch:
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: cleanup
+      cancel-in-progress: true
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run cleanup
+        env:
+          GITHUB_TOKEN: ${{ secrets.NETWORK_TOKEN }}
+        run: python -m engine.cleanup
+
+      - name: Commit changes
+        run: |
+          git config user.name "tracker-bot"
+          git config user.email "tracker@gittorrent.dev"
+          git add data/
+          git diff --cached --quiet && echo "Nothing to clean up" && exit 0
+          git commit -m "Cleanup: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          git push

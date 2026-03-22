@@ -1,0 +1,148 @@
+# Tracker workflow: Register or deregister a peer node.
+#
+# Triggered by issues titled:
+#   "REGISTER_PEER owner/repo-name"   — add peer to network
+#   "DEREGISTER_PEER owner/repo-name" — remove peer from network
+
+name: Register Peer
+
+on:
+  issues:
+    types: [opened]
+
+jobs:
+  register:
+    if: startsWith(github.event.issue.title, 'REGISTER_PEER')
+    runs-on: ubuntu-latest
+    concurrency:
+      group: register-peer
+      cancel-in-progress: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Extract peer repo from title
+        id: parse
+        run: |
+          TITLE="${{ github.event.issue.title }}"
+          PEER_REPO=$(echo "$TITLE" | sed 's/REGISTER_PEER[[:space:]]*//')
+          echo "peer_repo=$PEER_REPO" >> "$GITHUB_OUTPUT"
+          echo "Registering peer: $PEER_REPO"
+
+      - name: Verify peer repo exists
+        env:
+          GITHUB_TOKEN: ${{ secrets.NETWORK_TOKEN }}
+        run: |
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ steps.parse.outputs.peer_repo }}")
+
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "ERROR: Repo ${{ steps.parse.outputs.peer_repo }} not found (HTTP $HTTP_CODE)"
+            gh issue comment "${{ github.event.issue.number }}" \
+              --body "Registration failed: repository \`${{ steps.parse.outputs.peer_repo }}\` not found or not accessible."
+            gh issue close "${{ github.event.issue.number }}"
+            exit 1
+          fi
+          echo "Repo verified"
+
+      - name: Register peer
+        run: |
+          python -m engine.peer_manager \
+            --action=register \
+            --peer="${{ steps.parse.outputs.peer_repo }}"
+
+      - name: Commit updated peers
+        run: |
+          git config user.name "tracker-bot"
+          git config user.email "tracker@gittorrent.dev"
+          git add data/peers.json
+          git diff --cached --quiet && exit 0
+          git commit -m "Register peer: ${{ steps.parse.outputs.peer_repo }}"
+          git push
+
+      - name: Close issue with confirmation
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PEER="${{ steps.parse.outputs.peer_repo }}"
+          gh issue comment "${{ github.event.issue.number }}" --body "### Peer registered
+
+          \`$PEER\` has been added to the network.
+
+          The peer's heartbeat workflow will begin reporting status within 6 hours.
+          Chunks will be distributed to this peer on the next upload."
+
+          gh issue close "${{ github.event.issue.number }}"
+
+  deregister:
+    if: startsWith(github.event.issue.title, 'DEREGISTER_PEER')
+    runs-on: ubuntu-latest
+    concurrency:
+      group: register-peer
+      cancel-in-progress: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Extract peer repo from title
+        id: parse
+        run: |
+          TITLE="${{ github.event.issue.title }}"
+          PEER_REPO=$(echo "$TITLE" | sed 's/DEREGISTER_PEER[[:space:]]*//')
+          echo "peer_repo=$PEER_REPO" >> "$GITHUB_OUTPUT"
+          echo "Deregistering peer: $PEER_REPO"
+
+      - name: Deregister peer and trigger rebalance
+        env:
+          GITHUB_TOKEN: ${{ secrets.NETWORK_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          python -m engine.peer_manager \
+            --action=deregister \
+            --peer="${{ steps.parse.outputs.peer_repo }}"
+
+      - name: Trigger rebalance for orphaned chunks
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.NETWORK_TOKEN }}
+          repository: ${{ github.repository }}
+          event-type: rebalance-needed
+          client-payload: '{"triggered_by": "deregister", "peer": "${{ steps.parse.outputs.peer_repo }}"}'
+
+      - name: Commit updated peers
+        run: |
+          git config user.name "tracker-bot"
+          git config user.email "tracker@gittorrent.dev"
+          git add data/peers.json
+          git diff --cached --quiet && exit 0
+          git commit -m "Deregister peer: ${{ steps.parse.outputs.peer_repo }}"
+          git push
+
+      - name: Close issue with confirmation
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PEER="${{ steps.parse.outputs.peer_repo }}"
+          gh issue comment "${{ github.event.issue.number }}" --body "### Peer deregistered
+
+          \`$PEER\` has been removed from the network.
+
+          A rebalance has been triggered to redistribute any chunks that were stored on this peer."
+
+          gh issue close "${{ github.event.issue.number }}"

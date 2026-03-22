@@ -1,0 +1,10 @@
+{
+  "tracker_repo": "OWNER/torrent-tracker",
+  "network_token_secret": "NETWORK_TOKEN",
+  "storage_limit_mb": 2000,
+  "heartbeat_interval_hours": 6,
+  "chunk_expiry_days": 30,
+  "auto_prune": true,
+  "accept_new_chunks": true,
+  "max_concurrent_fetches": 3
+}

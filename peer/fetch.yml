@@ -1,0 +1,91 @@
+# Peer workflow: serve requested chunks back to the tracker.
+# Triggered by repository_dispatch from tracker's download pipeline.
+
+name: Fetch Chunks
+
+on:
+  repository_dispatch:
+    types: [fetch-chunks]
+
+jobs:
+  serve:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read requested chunks and build response
+        id: build_response
+        env:
+          PAYLOAD: ${{ toJson(github.event.client_payload) }}
+        run: |
+          set -euo pipefail
+
+          FILE_ID=$(echo "$PAYLOAD" | jq -r '.file_id')
+          TRANSFER_ID=$(echo "$PAYLOAD" | jq -r '.transfer_id')
+
+          echo "Serving chunks for transfer $TRANSFER_ID (file $FILE_ID)"
+
+          # Build JSON array of chunks
+          CHUNKS="[]"
+
+          for CHUNK_ID in $(echo "$PAYLOAD" | jq -r '.chunks_requested[]'); do
+            # Search for the chunk file across all file directories
+            CHUNK_FILE=$(find chunks/ -name "$CHUNK_ID.b64" 2>/dev/null | head -1)
+
+            if [ -z "$CHUNK_FILE" ]; then
+              echo "  WARNING: Chunk not found: $CHUNK_ID"
+              continue
+            fi
+
+            DATA=$(cat "$CHUNK_FILE")
+            HASH=$(echo "$DATA" | base64 -d | sha256sum | cut -d' ' -f1)
+
+            CHUNKS=$(echo "$CHUNKS" | jq \
+              --arg id "$CHUNK_ID" \
+              --arg data "$DATA" \
+              --arg hash "$HASH" \
+              '. + [{"id": $id, "data": $data, "sha256": $hash}]')
+
+            echo "  Serving $CHUNK_ID ($HASH)"
+          done
+
+          # Write response to file (dispatch payload can be large)
+          echo "$CHUNKS" > /tmp/response_chunks.json
+          echo "Prepared $(echo "$CHUNKS" | jq length) chunks for delivery"
+
+      - name: Send chunks to tracker
+        env:
+          PAYLOAD: ${{ toJson(github.event.client_payload) }}
+        run: |
+          set -euo pipefail
+
+          TRANSFER_ID=$(echo "$PAYLOAD" | jq -r '.transfer_id')
+          CALLBACK_REPO=$(echo "$PAYLOAD" | jq -r '.callback_repo')
+          CHUNKS=$(cat /tmp/response_chunks.json)
+
+          # Build the full callback payload
+          CALLBACK_PAYLOAD=$(jq -n \
+            --arg peer "${{ github.repository }}" \
+            --arg transfer_id "$TRANSFER_ID" \
+            --argjson chunks "$CHUNKS" \
+            '{peer: $peer, transfer_id: $transfer_id, chunks: $chunks}')
+
+          # Send via GitHub API (repository_dispatch)
+          HTTP_CODE=$(curl -s -o /tmp/dispatch_response.txt -w "%{http_code}" \
+            -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${{ secrets.NETWORK_TOKEN }}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/$CALLBACK_REPO/dispatches" \
+            -d "$(jq -n \
+              --arg event_type "chunks-ready" \
+              --argjson payload "$CALLBACK_PAYLOAD" \
+              '{event_type: $event_type, client_payload: $payload}')")
+
+          if [ "$HTTP_CODE" = "204" ]; then
+            echo "Callback sent to $CALLBACK_REPO (transfer $TRANSFER_ID)"
+          else
+            echo "Callback FAILED: HTTP $HTTP_CODE"
+            cat /tmp/dispatch_response.txt
+            exit 1
+          fi

@@ -1,0 +1,52 @@
+# Peer workflow: periodic heartbeat to the tracker.
+# Reports that this peer is alive and sends storage stats.
+
+name: Heartbeat
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'   # every 6 hours
+  workflow_dispatch:          # allow manual trigger
+
+jobs:
+  heartbeat:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Gather stats
+        id: stats
+        run: |
+          set -euo pipefail
+
+          # Read config
+          TRACKER=$(jq -r '.tracker_repo' config.json)
+          echo "tracker=$TRACKER" >> "$GITHUB_OUTPUT"
+
+          # Calculate storage used
+          if [ -d chunks ]; then
+            STORAGE_BYTES=$(du -sb chunks/ 2>/dev/null | cut -f1 || echo 0)
+            STORAGE_MB=$(( STORAGE_BYTES / 1048576 ))
+            CHUNK_COUNT=$(find chunks/ -name '*.b64' 2>/dev/null | wc -l | tr -d ' ')
+          else
+            STORAGE_MB=0
+            CHUNK_COUNT=0
+          fi
+
+          echo "storage_used_mb=$STORAGE_MB" >> "$GITHUB_OUTPUT"
+          echo "chunk_count=$CHUNK_COUNT" >> "$GITHUB_OUTPUT"
+          echo "Heartbeat: ${STORAGE_MB}MB used, ${CHUNK_COUNT} chunks"
+
+      - name: Send heartbeat to tracker
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.NETWORK_TOKEN }}
+          repository: ${{ steps.stats.outputs.tracker }}
+          event-type: peer-heartbeat
+          client-payload: >-
+            {
+              "peer": "${{ github.repository }}",
+              "storage_used_mb": ${{ steps.stats.outputs.storage_used_mb }},
+              "chunk_count": ${{ steps.stats.outputs.chunk_count }},
+              "status": "online"
+            }

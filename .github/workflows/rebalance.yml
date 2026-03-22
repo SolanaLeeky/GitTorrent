@@ -1,0 +1,46 @@
+# Tracker workflow: Redistribute chunks from dead/offline peers to live ones.
+#
+# Triggered by health-check.yml when under-replicated chunks are detected.
+# For each chunk with fewer live copies than the redundancy target:
+#   1. Find a surviving peer that has the chunk
+#   2. Find a new target peer with available storage
+#   3. Dispatch replicate-chunk to the surviving peer (peer-to-peer copy)
+#   4. Update file index with new peer location
+
+name: Rebalance
+
+on:
+  repository_dispatch:
+    types: [rebalance-needed]
+  workflow_dispatch:
+
+jobs:
+  rebalance:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: rebalance
+      cancel-in-progress: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Rebalance under-replicated chunks
+        env:
+          GITHUB_TOKEN: ${{ secrets.NETWORK_TOKEN }}
+        run: python -m engine.peer_manager --action=rebalance
+
+      - name: Commit updated file indexes
+        run: |
+          git config user.name "tracker-bot"
+          git config user.email "tracker@gittorrent.dev"
+          git add data/
+          git diff --cached --quiet && echo "No rebalancing needed" && exit 0
+          git commit -m "Rebalance: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          git push

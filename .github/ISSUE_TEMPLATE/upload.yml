@@ -1,0 +1,23 @@
+name: Upload File
+description: Share a file on the GitTorrent network
+title: "UPLOAD "
+labels: ["upload"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Upload a file to GitTorrent
+
+        Drag and drop your file into the text area below. The system will
+        split it into chunks and distribute across peer nodes.
+
+        **Limits**: Max 100 MB per file. Chunks expire after 30 days.
+
+  - type: textarea
+    id: file
+    attributes:
+      label: File attachment
+      description: Drag and drop your file here, or paste a direct URL.
+      placeholder: Drop your file here...
+    validations:
+      required: true

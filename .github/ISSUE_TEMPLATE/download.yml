@@ -1,0 +1,21 @@
+name: Download File
+description: Download a file from the GitTorrent network
+title: "DOWNLOAD "
+labels: ["download"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Download a file from GitTorrent
+
+        Enter the exact filename you want to download. You can find
+        available files in the [data/files](../../tree/main/data/files) directory.
+
+  - type: input
+    id: filename
+    attributes:
+      label: Filename
+      description: The exact filename to download (e.g. my-video.mp4)
+      placeholder: my-video.mp4
+    validations:
+      required: true

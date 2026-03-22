@@ -1,0 +1,14 @@
+{
+  "tracker_repo": "",
+  "authorized_uploaders": [],
+  "allow_public_uploads": true,
+  "max_file_size_mb": 100,
+  "chunk_size_bytes": 40960,
+  "default_redundancy": 2,
+  "file_expiry_days": 30,
+  "transfer_timeout_seconds": 600,
+  "rate_limit_dispatches_per_hour": 4000,
+  "blacklisted_peers": [],
+  "max_failed_chunks_before_blacklist": 5,
+  "encryption_enabled": false
+}

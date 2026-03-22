@@ -1,0 +1,106 @@
+# Tracker workflow: Monitor peer health and detect under-replicated chunks.
+#
+# Two triggers:
+#   1. Cron every 6 hours — scan all peers, mark stale ones degraded/offline
+#   2. repository_dispatch[peer-heartbeat] — update a peer's stats immediately
+#
+# If under-replicated chunks are found, dispatches rebalance-needed.
+
+name: Health Check
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  repository_dispatch:
+    types: [peer-heartbeat, store-confirm, replicate-confirm]
+  workflow_dispatch:
+
+jobs:
+  # ── Process heartbeat callback ────────────────────────────────────
+  heartbeat:
+    if: >
+      github.event_name == 'repository_dispatch' &&
+      github.event.action == 'peer-heartbeat'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: health-heartbeat
+      cancel-in-progress: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Process heartbeat
+        env:
+          PEER_REPO: ${{ github.event.client_payload.peer }}
+          PAYLOAD: ${{ toJson(github.event.client_payload) }}
+        run: |
+          python -m engine.peer_manager \
+            --action=heartbeat \
+            --peer="$PEER_REPO" \
+            --payload="$PAYLOAD"
+
+      - name: Commit updated peers
+        run: |
+          git config user.name "tracker-bot"
+          git config user.email "tracker@gittorrent.dev"
+          git add data/peers.json
+          git diff --cached --quiet && exit 0
+          git commit -m "Heartbeat: ${{ github.event.client_payload.peer }}"
+          git pull --rebase || true
+          git push
+
+  # ── Process store/replicate confirmations ─────────────────────────
+  confirm:
+    if: >
+      github.event_name == 'repository_dispatch' &&
+      (github.event.action == 'store-confirm' || github.event.action == 'replicate-confirm')
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log confirmation
+        run: |
+          echo "Confirmed: ${{ github.event.action }} from ${{ github.event.client_payload.peer }}"
+          echo "  File: ${{ github.event.client_payload.filename }}"
+          echo "  Status: ${{ github.event.client_payload.status }}"
+
+  # ── Scheduled full health check ───────────────────────────────────
+  scheduled-check:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: health-scheduled
+      cancel-in-progress: true
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run health check
+        env:
+          GITHUB_TOKEN: ${{ secrets.NETWORK_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: python -m engine.peer_manager --action=health
+
+      - name: Commit updated peers
+        run: |
+          git config user.name "tracker-bot"
+          git config user.email "tracker@gittorrent.dev"
+          git add data/
+          git diff --cached --quiet && echo "No changes" && exit 0
+          git commit -m "Health check: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          git push

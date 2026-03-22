@@ -1,0 +1,199 @@
+# Tracker workflow: Download a file from the GitTorrent network.
+#
+# Two jobs:
+#   1. initiate — triggered by issue "DOWNLOAD <filename>", dispatches fetch to peers
+#   2. collect  — triggered by repository_dispatch[chunks-ready] peer callbacks,
+#                 receives chunks, and when all arrive: reassemble + release + close issue
+#
+# Chunk persistence: received chunks are committed as .b64 files under
+# data/transfers/{transfer_id}/ so they survive across independent workflow runs.
+
+name: Download File
+
+on:
+  issues:
+    types: [opened]
+  repository_dispatch:
+    types: [chunks-ready]
+
+jobs:
+  # ── Job 1: Initiate download ──────────────────────────────────────
+  initiate:
+    if: >
+      github.event_name == 'issues' &&
+      startsWith(github.event.issue.title, 'DOWNLOAD')
+    runs-on: ubuntu-latest
+    concurrency:
+      group: download-${{ github.event.issue.number }}
+      cancel-in-progress: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Create transfer and dispatch fetch to peers
+        env:
+          GITHUB_TOKEN: ${{ secrets.NETWORK_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          GITHUB_ACTOR: ${{ github.event.issue.user.login }}
+        run: python -m engine.collector --phase=request
+
+      - name: Commit transfer state
+        run: |
+          git config user.name "tracker-bot"
+          git config user.email "tracker@gittorrent.dev"
+          git add data/transfers/
+          git diff --cached --quiet && echo "No changes to commit" && exit 0
+          git commit -m "Download initiated: $(cat /tmp/download_request.json | python3 -c 'import sys,json; print(json.load(sys.stdin)["filename"])')"
+          git push
+
+      - name: Comment on issue
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          if [ -f /tmp/download_request.json ]; then
+            FILENAME=$(python3 -c "import json; print(json.load(open('/tmp/download_request.json'))['filename'])")
+            CHUNKS=$(python3 -c "import json; print(json.load(open('/tmp/download_request.json'))['total_chunks'])")
+            PEERS=$(python3 -c "import json; print(json.load(open('/tmp/download_request.json'))['peer_count'])")
+            TRANSFER=$(python3 -c "import json; print(json.load(open('/tmp/download_request.json'))['transfer_id'])")
+
+            gh issue comment "$ISSUE_NUMBER" --body "### Download initiated
+
+          | Field | Value |
+          |-------|-------|
+          | **File** | \`$FILENAME\` |
+          | **Chunks** | $CHUNKS |
+          | **Peers** | $PEERS |
+          | **Transfer ID** | \`$TRANSFER\` |
+
+          Fetching chunks from peers... This issue will be updated when the file is ready."
+          fi
+
+  # ── Job 2: Collect chunks from peer callbacks ─────────────────────
+  collect:
+    if: >
+      github.event_name == 'repository_dispatch' &&
+      github.event.action == 'chunks-ready'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: collect-${{ github.event.client_payload.transfer_id }}
+      cancel-in-progress: false
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Fetch latest to pick up chunks from prior callbacks
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Pull latest (pick up prior callback commits)
+        run: git pull --rebase origin main || git pull --rebase origin master || true
+
+      - name: Process incoming chunks
+        env:
+          GITHUB_TOKEN: ${{ secrets.NETWORK_TOKEN }}
+          PAYLOAD: ${{ toJson(github.event.client_payload) }}
+        run: python -m engine.collector --phase=receive
+
+      - name: Commit received chunks
+        run: |
+          git config user.name "tracker-bot"
+          git config user.email "tracker@gittorrent.dev"
+          git add data/
+          git diff --cached --quiet && echo "No changes to commit" && exit 0
+
+          PEER="${{ github.event.client_payload.peer }}"
+          git commit -m "Chunks received from ${PEER}"
+
+          # Retry push with rebase on conflict (parallel peer callbacks)
+          for i in 1 2 3; do
+            git push && break
+            echo "Push conflict, retrying ($i/3)..."
+            git pull --rebase origin main || git pull --rebase origin master
+          done
+
+      - name: Check if download is complete
+        id: check_complete
+        run: |
+          if [ -f /tmp/download_result.json ]; then
+            STATUS=$(python3 -c "import json; print(json.load(open('/tmp/download_result.json'))['status'])")
+            echo "complete=true" >> "$GITHUB_OUTPUT"
+            echo "status=$STATUS" >> "$GITHUB_OUTPUT"
+          else
+            echo "complete=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create release with assembled file
+        if: steps.check_complete.outputs.complete == 'true' && steps.check_complete.outputs.status == 'complete'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          FILENAME=$(python3 -c "import json; print(json.load(open('/tmp/download_result.json'))['filename'])")
+          FILEPATH=$(python3 -c "import json; print(json.load(open('/tmp/download_result.json'))['file_path'])")
+          SHA=$(python3 -c "import json; print(json.load(open('/tmp/download_result.json'))['sha256'][:16])")
+          SIZE=$(python3 -c "import json; print(json.load(open('/tmp/download_result.json'))['size_bytes'])")
+          TRANSFER=$(python3 -c "import json; print(json.load(open('/tmp/download_result.json'))['transfer_id'])")
+
+          TAG="download-${TRANSFER}"
+          TITLE="Download: ${FILENAME}"
+
+          gh release create "$TAG" \
+            --title "$TITLE" \
+            --notes "**File**: \`${FILENAME}\`
+          **Size**: ${SIZE} bytes
+          **SHA-256**: \`${SHA}...\`
+          **Transfer**: \`${TRANSFER}\`
+
+          Downloaded and verified by GitTorrent." \
+            "$FILEPATH"
+
+          echo "RELEASE_URL=$(gh release view "$TAG" --json url -q '.url')" >> "$GITHUB_ENV"
+          echo "Release created: $TAG"
+
+      - name: Close download issue
+        if: steps.check_complete.outputs.complete == 'true' && steps.check_complete.outputs.status == 'complete'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ISSUE_NUMBER=$(python3 -c "import json; print(json.load(open('/tmp/download_result.json'))['issue_number'])")
+          FILENAME=$(python3 -c "import json; print(json.load(open('/tmp/download_result.json'))['filename'])")
+
+          gh issue comment "$ISSUE_NUMBER" --body "### Download complete
+
+          Your file is ready: [**${FILENAME}**](${RELEASE_URL})
+
+          The file has been verified (SHA-256 match)."
+
+          gh issue close "$ISSUE_NUMBER"
+
+      - name: Clean up transfer chunks from repo
+        if: steps.check_complete.outputs.complete == 'true'
+        run: |
+          TRANSFER=$(python3 -c "import json; print(json.load(open('/tmp/download_result.json'))['transfer_id'])")
+          CHUNKS_DIR="data/transfers/${TRANSFER}"
+
+          if [ -d "$CHUNKS_DIR" ]; then
+            rm -rf "$CHUNKS_DIR"
+            git config user.name "tracker-bot"
+            git config user.email "tracker@gittorrent.dev"
+            git add data/transfers/
+            git diff --cached --quiet || git commit -m "Cleanup: remove chunks for ${TRANSFER}"
+            git push || true
+          fi
