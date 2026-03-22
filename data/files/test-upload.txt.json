@@ -10,7 +10,7 @@
   "expires_at": "2026-04-21T08:43:37.728265+00:00",
   "redundancy": 2,
   "status": "healthy",
-  "download_count": 0,
+  "download_count": 1,
   "chunks": {
     "chunk_000": {
       "sha256": "11fe91568fd538f279a003712bf3e27918aa0c7d62f629e691bc9402bed6f8bf",

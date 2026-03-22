@@ -5,17 +5,17 @@
   "requester": "SolanaLeeky",
   "issue_number": 17,
   "started_at": "2026-03-22T08:45:09.663937+00:00",
-  "status": "in_progress",
+  "status": "complete",
   "total_chunks": 1,
-  "received_chunks": 0,
+  "received_chunks": 1,
   "failed_chunks": 0,
   "timeout_at": "2026-03-22T08:55:09.663937+00:00",
   "chunks": {
     "chunk_000": {
-      "status": "pending",
+      "status": "received",
       "assigned_peer": "SolanaLeeky/peer-node-01",
-      "from": "",
-      "at": ""
+      "from": "SolanaLeeky/peer-node-01",
+      "at": "2026-03-22T08:45:26.534420+00:00"
     }
   }
 }
