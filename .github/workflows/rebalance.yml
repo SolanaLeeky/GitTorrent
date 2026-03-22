@@ -14,6 +14,9 @@ on:
     types: [rebalance-needed]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   rebalance:
     runs-on: ubuntu-latest

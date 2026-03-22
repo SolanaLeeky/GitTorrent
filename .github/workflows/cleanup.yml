@@ -12,6 +12,9 @@ on:
     - cron: '0 4 * * *'   # daily at 4 AM UTC
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   cleanup:
     runs-on: ubuntu-latest

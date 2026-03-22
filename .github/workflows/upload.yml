@@ -9,6 +9,10 @@ on:
   issues:
     types: [opened]
 
+permissions:
+  contents: write
+  issues: write
+
 jobs:
   upload:
     if: startsWith(github.event.issue.title, 'UPLOAD')

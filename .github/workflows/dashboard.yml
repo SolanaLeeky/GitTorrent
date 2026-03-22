@@ -11,6 +11,9 @@ on:
     types: [completed]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   dashboard:
     runs-on: ubuntu-latest
