@@ -7,6 +7,9 @@ on:
   repository_dispatch:
     types: [store-chunks]
 
+permissions:
+  contents: write
+
 jobs:
   store:
     runs-on: ubuntu-latest

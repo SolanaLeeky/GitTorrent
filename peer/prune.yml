@@ -10,6 +10,9 @@ on:
     types: [prune-file]       # tracker can force-prune a specific file
   workflow_dispatch:           # allow manual trigger
 
+permissions:
+  contents: write
+
 jobs:
   prune:
     runs-on: ubuntu-latest
