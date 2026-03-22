@@ -12,7 +12,7 @@
 | Storage | 0 MB / 6000 MB |
 | Files | 2 |
 | Uploads | 3 |
-| Downloads | 0 |
+| Downloads | 1 |
 | Redundancy | 2x |
 | Encryption | Disabled |
 
@@ -21,7 +21,7 @@
 | Filename | Size | Chunks | Downloads | Uploaded | Expires |
 |----------|------|--------|-----------|----------|---------|
 | `gists.txt` | 9.4 KB | 1 | 0 | 2026-03-22 | 2026-04-21 |
-| `test-upload.txt` | 93 B | 1 | 0 | 2026-03-22 | 2026-04-21 |
+| `test-upload.txt` | 93 B | 1 | 1 | 2026-03-22 | 2026-04-21 |
 
 ## Peers
 
