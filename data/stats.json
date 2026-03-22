@@ -1,7 +1,7 @@
 {
-  "uploads": 0,
+  "uploads": 1,
   "downloads": 0,
-  "total_chunks_stored": 0,
-  "total_bytes_transferred": 0,
+  "total_chunks_stored": 1,
+  "total_bytes_transferred": 9634,
   "active_transfers": 0
 }

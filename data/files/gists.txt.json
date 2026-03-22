@@ -1,0 +1,25 @@
+{
+  "file_id": "f_ac4b0909",
+  "filename": "gists.txt",
+  "size_bytes": 9634,
+  "chunk_size_bytes": 40960,
+  "total_chunks": 1,
+  "sha256": "ac4b09093365d6db0ce63b14b63648c217da79c893bb53a12334a2900ea5d501",
+  "uploaded_by": "SolanaLeeky",
+  "uploaded_at": "2026-03-22T08:35:12.151935+00:00",
+  "expires_at": "2026-04-21T08:35:12.151935+00:00",
+  "redundancy": 2,
+  "status": "healthy",
+  "download_count": 0,
+  "chunks": {
+    "chunk_000": {
+      "sha256": "ac4b09093365d6db0ce63b14b63648c217da79c893bb53a12334a2900ea5d501",
+      "size_bytes": 9634,
+      "peers": [
+        "SolanaLeeky/peer-node-01",
+        "SolanaLeeky/peer-node-02"
+      ],
+      "status": "stored"
+    }
+  }
+}
