@@ -23,10 +23,22 @@
       "total_fetches": 0,
       "failed_fetches": 0,
       "joined_at": "2026-03-22T08:20:28.017614+00:00"
+    },
+    "SolanaLeeky/peer-node-03": {
+      "status": "online",
+      "last_heartbeat": "",
+      "storage_used_mb": 0,
+      "storage_limit_mb": 2000,
+      "chunk_count": 0,
+      "uptime_pct": 100.0,
+      "avg_response_ms": 0,
+      "total_fetches": 0,
+      "failed_fetches": 0,
+      "joined_at": "2026-03-22T08:21:46.126843+00:00"
     }
   },
-  "total_peers": 2,
-  "online_peers": 2,
+  "total_peers": 3,
+  "online_peers": 3,
   "total_storage_mb": 0,
   "used_storage_mb": 0
 }
