@@ -13,11 +13,11 @@
       "joined_at": "2026-03-22T08:18:07.244076+00:00"
     },
     "SolanaLeeky/peer-node-02": {
-      "status": "offline",
-      "last_heartbeat": "",
+      "status": "online",
+      "last_heartbeat": "2026-03-22T12:46:05.206794+00:00",
       "storage_used_mb": 0,
       "storage_limit_mb": 2000,
-      "chunk_count": 0,
+      "chunk_count": 1,
       "uptime_pct": 100.0,
       "avg_response_ms": 0,
       "total_fetches": 0,
@@ -38,7 +38,7 @@
     }
   },
   "total_peers": 3,
-  "online_peers": 0,
+  "online_peers": 1,
   "total_storage_mb": 0,
   "used_storage_mb": 0
 }
