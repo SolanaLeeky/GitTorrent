@@ -1,7 +1,7 @@
 {
   "peers": {
     "SolanaLeeky/peer-node-01": {
-      "status": "online",
+      "status": "offline",
       "last_heartbeat": "",
       "storage_used_mb": 0,
       "storage_limit_mb": 2000,
@@ -13,7 +13,7 @@
       "joined_at": "2026-03-22T08:18:07.244076+00:00"
     },
     "SolanaLeeky/peer-node-02": {
-      "status": "online",
+      "status": "offline",
       "last_heartbeat": "",
       "storage_used_mb": 0,
       "storage_limit_mb": 2000,
@@ -25,7 +25,7 @@
       "joined_at": "2026-03-22T08:20:28.017614+00:00"
     },
     "SolanaLeeky/peer-node-03": {
-      "status": "online",
+      "status": "offline",
       "last_heartbeat": "",
       "storage_used_mb": 0,
       "storage_limit_mb": 2000,
@@ -38,7 +38,7 @@
     }
   },
   "total_peers": 3,
-  "online_peers": 3,
+  "online_peers": 0,
   "total_storage_mb": 0,
   "used_storage_mb": 0
 }
