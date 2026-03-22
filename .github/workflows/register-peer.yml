@@ -71,7 +71,11 @@ jobs:
           git add data/peers.json
           git diff --cached --quiet && exit 0
           git commit -m "Register peer: ${{ steps.parse.outputs.peer_repo }}"
-          git push
+          for i in 1 2 3; do
+            git push && break
+            echo "Push conflict, retrying ($i/3)..."
+            git pull --rebase
+          done
 
       - name: Close issue with confirmation
         env:
@@ -136,7 +140,11 @@ jobs:
           git add data/peers.json
           git diff --cached --quiet && exit 0
           git commit -m "Deregister peer: ${{ steps.parse.outputs.peer_repo }}"
-          git push
+          for i in 1 2 3; do
+            git push && break
+            echo "Push conflict, retrying ($i/3)..."
+            git pull --rebase
+          done
 
       - name: Close issue with confirmation
         env:
