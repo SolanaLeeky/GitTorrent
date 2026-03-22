@@ -2,7 +2,7 @@
 
 > P2P file sharing built on GitHub Actions + `repository_dispatch`
 
-*Dashboard updated: 2026-03-22 08:43 UTC*
+*Dashboard updated: 2026-03-22 08:44 UTC*
 
 ## Network Status
 
@@ -11,7 +11,7 @@
 | Peers | **3** online / 0 degraded / 0 offline |
 | Storage | 0 MB / 6000 MB |
 | Files | 2 |
-| Uploads | 2 |
+| Uploads | 3 |
 | Downloads | 0 |
 | Redundancy | 2x |
 | Encryption | Disabled |
