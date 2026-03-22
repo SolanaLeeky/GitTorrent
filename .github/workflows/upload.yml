@@ -71,8 +71,13 @@ jobs:
           git config user.email "tracker@gittorrent.dev"
           git add data/
           git diff --cached --quiet && echo "No changes to commit" && exit 0
-          git commit -m "Upload: $(cat /tmp/upload_summary.json | python3 -c 'import sys,json; print(json.load(sys.stdin)[\"filename\"])')"
-          git push
+          FNAME=$(python3 -c "import json; print(json.load(open('/tmp/upload_summary.json'))['filename'])")
+          git commit -m "Upload: $FNAME"
+          for i in 1 2 3; do
+            git push && break
+            echo "Push conflict, retrying ($i/3)..."
+            git pull --rebase
+          done
 
       - name: Comment and close issue
         env:
