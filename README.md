@@ -10,15 +10,17 @@
 |--------|-------|
 | Peers | **3** online / 0 degraded / 0 offline |
 | Storage | 0 MB / 6000 MB |
-| Files | 0 |
-| Uploads | 0 |
+| Files | 1 |
+| Uploads | 1 |
 | Downloads | 0 |
 | Redundancy | 2x |
 | Encryption | Disabled |
 
 ## Files
 
-*No files shared yet. Open an issue titled `UPLOAD <filename>` to share a file.*
+| Filename | Size | Chunks | Downloads | Uploaded | Expires |
+|----------|------|--------|-----------|----------|---------|
+| `gists.txt` | 9.4 KB | 1 | 0 | 2026-03-22 | 2026-04-21 |
 
 ## Peers
 
