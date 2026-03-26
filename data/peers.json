@@ -14,7 +14,7 @@
     },
     "SolanaLeeky/peer-node-02": {
       "status": "online",
-      "last_heartbeat": "2026-03-26T13:10:54.165481+00:00",
+      "last_heartbeat": "2026-03-26T19:02:46.219725+00:00",
       "storage_used_mb": 0,
       "storage_limit_mb": 2000,
       "chunk_count": 1,
