@@ -2,7 +2,7 @@
 
 > P2P file sharing built on GitHub Actions + `repository_dispatch`
 
-*Dashboard updated: 2026-03-28 01:53 UTC*
+*Dashboard updated: 2026-03-28 01:59 UTC*
 
 ## Network Status
 
@@ -28,7 +28,7 @@
 | Peer | Status | Storage | Chunks | Uptime | Last Seen |
 |------|--------|---------|--------|--------|-----------|
 | `SolanaLeeky/peer-node-01` | 🟢 online | 0/2000 MB | 1 | 100.0% | 2026-03-27T19:05 |
-| `SolanaLeeky/peer-node-02` | 🟢 online | 0/2000 MB | 1 | 100.0% | 2026-03-27T18:53 |
+| `SolanaLeeky/peer-node-02` | 🟢 online | 0/2000 MB | 1 | 100.0% | 2026-03-28T01:59 |
 | `SolanaLeeky/peer-node-03` | 🟢 online | 0/2000 MB | 0 | 100.0% | 2026-03-27T18:55 |
 
 ## How to Use
